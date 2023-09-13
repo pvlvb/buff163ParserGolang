@@ -4,11 +4,71 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 )
+
+func makeRequestWithProxy(proxyURLStr, cookieStr, userAgentStr, apiLink string) ([]byte, int, error) {
+	parsedProxyURL, err := url.Parse(proxyURLStr)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error parsing proxy URL: %v", err)
+	}
+
+	httpTransport := &http.Transport{}
+	httpClient := &http.Client{Transport: httpTransport}
+
+	switch strings.ToLower(parsedProxyURL.Scheme) {
+	case "http", "https":
+		httpTransport.Proxy = http.ProxyURL(parsedProxyURL)
+	case "socks":
+		auth := &proxy.Auth{
+			User:     parsedProxyURL.User.Username(),
+			Password: getPasswordFromURL(parsedProxyURL),
+		}
+		dialer, err := proxy.SOCKS5("tcp", parsedProxyURL.Host, auth, proxy.Direct)
+		if err != nil {
+			return nil, 0, fmt.Errorf("error creating SOCKS5 dialer: %v", err)
+		}
+		httpTransport.Dial = dialer.Dial
+	default:
+		return nil, 0, fmt.Errorf("unsupported proxy type: %s", parsedProxyURL.Scheme)
+	}
+
+	request, err := http.NewRequest("GET", apiLink, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error creating the request: %v", err)
+	}
+
+	// Set Cookie and User-Agent
+	request.Header.Set("Cookie", cookieStr)
+	request.Header.Set("User-Agent", userAgentStr)
+
+	// Make the request
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error making request: %v", err)
+	}
+	defer response.Body.Close()
+
+	bodyBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error reading response body: %v", err)
+	}
+
+	return bodyBytes, response.StatusCode, nil
+}
+
+func getPasswordFromURL(u *url.URL) string {
+	if password, set := u.User.Password(); set {
+		return password
+	}
+	return ""
+}
 
 // Processed item structure
 type ProcessedItem struct {

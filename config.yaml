@@ -1,0 +1,7 @@
+#Defines the mode in which parser starts -- "cookieParsing" - parsing buff163 with accounts,
+#nonCookieParsing - parsing buff163 fp without accounts, only with proxies
+#fairyTale - both modes
+mode: cookieParsing
+BackendAPIKeyEnv: 123123
+
+#TODO ADD number of floatCategories to parse
